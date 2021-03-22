@@ -1,0 +1,65 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas_datareader as web
+from datetime import date
+from scipy.signal import find_peaks
+from scipy.signal import argrelmin
+
+start= date(2019,2,25)
+end=date(2021,2,25)
+stock=web.DataReader('AAPL','yahoo',start,end)
+stock.dropna(inplace=True)
+
+x1=stock['Adj Close'].to_numpy()
+rel_max_pos, _ = find_peaks(x1, distance=30)#it returns 
+rel_min_pos=argrelmin(x1, order=8)
+
+peaks_stock_price=stock['Adj Close'][rel_max_pos]
+lows_stock_price=stock['Adj Close'][rel_min_pos[0]]
+
+stock["MA_Fast"]=stock["Adj Close"].ewm(span=12, adjust=False).mean()
+stock["MA_Slow"]=stock["Adj Close"].ewm(span=26, adjust=False).mean()
+stock["MACD"]=stock["MA_Fast"]-stock["MA_Slow"]
+stock["Signal"]=stock["MACD"].ewm(span=9, adjust=False).mean()
+lows_macd=stock['MACD'][peaks_stock_price.index]
+peaks_macd=stock['MACD'][lows_stock_price.index]
+
+higher_tops_prices=peaks_stock_price[peaks_stock_price>peaks_stock_price.shift(1)]#it returns consecutive maxima where the first one is less than the second one
+lower_lows_prices=lows_stock_price[lows_stock_price<lows_stock_price.shift(1)]#it returns consecutive minima where the first one is higher than the second one
+
+
+mh=lows_macd[(lows_macd<lows_macd.shift(1)) & (lows_macd>0)]
+sell_prices_t_1=higher_tops_prices[mh.index].dropna()
+sell_macd_t_1=mh[higher_tops_prices.index].dropna()
+n=list(map(lambda x:(pd.Index(peaks_stock_price).get_loc(x)-1),sell_prices_t_1))
+sell_prices_t=peaks_stock_price[n]
+sell_macd_t=lows_macd[n]
+
+
+
+ml=peaks_macd[(peaks_macd>peaks_macd.shift(1))&(peaks_macd<0)]
+buy_prices_t_1=lower_lows_prices[ml.index].dropna()
+buy_macd_t_1=ml[lower_lows_prices.index].dropna()
+n=list(map(lambda x:(pd.Index(lows_stock_price).get_loc(x)-1),buy_prices_t_1))
+buy_prices_t=lows_stock_price[n]
+buy_macd_t=peaks_macd[n]
+
+#we plot the buy and sell signals 
+a3 = plt.figure(figsize=(20,12))
+plt.subplot(2,1,1)
+plt.plot(stock['Adj Close'],'blue', label='Adj Close')
+plt.plot(sell_prices_t_1, "o" ,color='red')
+plt.plot(sell_prices_t, "o" ,color='red')
+plt.plot(buy_prices_t_1, "o" ,color='green')
+plt.plot(buy_prices_t, "o" ,color='green')
+plt.legend()
+plt.subplot(2,1,2)
+plt.plot(stock['MACD'], 'yellow' ,label='MACD')
+plt.plot(sell_macd_t_1, "v", color='red')
+plt.plot(sell_macd_t, "o" ,color='red')
+plt.plot(buy_macd_t_1, "v", color='green')
+plt.plot(buy_macd_t, "o" ,color='green')
+plt.axhline(y = 0, color = 'black', linestyle = '-')
+plt.legend()
+plt.show()
