@@ -1,0 +1,42 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas_datareader as web
+from datetime import date
+from scipy.signal import find_peaks
+start= date(2019,1,20)
+end=date(2021,1,20)
+stock=web.DataReader('VZ','yahoo',start,end)
+stock.dropna(inplace=True)
+
+x1=stock['Adj Close'].to_numpy()
+
+peaks_price, _ = find_peaks(x1, distance=20)
+peaks_stock_price=stock['Adj Close'][peaks_price]
+
+stock['momentum']=(stock['Adj Close'] / stock['Adj Close'].shift(14))*100
+peaks_momentum=stock['momentum'][peaks_stock_price.index]
+
+a=peaks_stock_price[peaks_stock_price>peaks_stock_price.shift(1)]
+m=peaks_momentum[peaks_momentum<peaks_momentum.shift(1)]
+div=a[m.index].dropna()
+
+div2=m[a.index].dropna()
+
+n=list(map(lambda x:(pd.Index(peaks_stock_price).get_loc(x)-1),div))
+top_t=peaks_stock_price[n]
+mom_t=peaks_momentum[n]
+
+a3 = plt.figure(figsize=(20,12))
+plt.subplot(2,1,1)
+plt.plot(stock['Adj Close'],'blue', label='Adj Close')
+plt.plot(div, "o" ,color='red')
+plt.plot(top_t, "o" ,color='red')
+plt.legend()
+plt.subplot(2,1,2)
+plt.plot(stock['momentum'], 'yellow' ,label='momentum')
+plt.plot(div2, "v", color='red')
+plt.plot(mom_t, "o" ,color='black')
+plt.axhline(y = 100, color = 'black', linestyle = '-')
+plt.legend()
+plt.show()
