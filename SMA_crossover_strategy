@@ -1,0 +1,69 @@
+#SMA crossover strategy, my edition
+#fast sma: SMA_30
+#slow sma: SMA_150
+
+#We use the common signals
+
+#We calculate the difference between SMA_30 and SMA_150
+#We create a table with these values and we search for changes on their sign
+
+# ex: day(t) SMA_30 <= SMA_150 => SMA_30-SMA_150 <= 0 => diff<=0
+#     day(t+1) SMA_30 > SMA_150 => SMA_30-SMA_150 > 0 => diff>0
+# It means that SMA_30 crosses below SMA_150, which is a buy signal
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import pandas_datareader as web
+from datetime import date
+
+#downloading data from Yahoo
+quote='FB'
+
+start= date(year=2020, month=1, day=20)
+end=date(2021,1,20)
+
+stock=web.DataReader(quote,'yahoo',start,end)
+
+price=pd.DataFrame(stock['Adj Close'])#I'll insert only the closing price
+
+def crossover_strat(price, fast=35, slow=150):
+    #calculation of sma
+    price['slow']=price['Adj Close'].rolling(window=slow).mean()
+    price['fast']=price['Adj Close'].rolling(window=fast).mean()
+    
+    price['dif']=  price['fast'][slow :]  - price['slow'][slow :]
+    #we create 2 dataframes to store the signals
+    buy=pd.DataFrame()
+    sell=pd.DataFrame()
+    
+    #we create a table with 2 columns
+    #our goal is to compare the rows of the table to find changes on their signs 
+    #to interpret a change look on the example above
+    #prices before slow+1 are NaN
+    b=price['dif'][(slow+1) :]#day t+1
+    c=price['dif'][(slow+1) :].shift(1)#day t
+    e=pd.concat([c,b],axis=1)
+    
+    buy['sell_signal']=price['Adj Close'][e[(e.iloc[:,1]<=0) & (e.iloc[:,0]>0)].index]
+    sell['buy_signal']=price['Adj Close'][e[(e.iloc[:,1]>0) & (e.iloc[:,0]<=0)].index]
+    
+    signals=pd.concat([buy,sell])
+    signals.sort_index(inplace=True)
+    return signals
+
+signals= crossover_strat(price, fast=30, slow=150)
+
+
+ab = plt.figure(figsize=(20,12))
+last_date = price.index[0]
+first_date = price.index[-1]
+plt.plot(price['Adj Close'],label = 'Adj Close', alpha = 0.35)
+plt.plot(price['fast'], label = 'fast', alpha = 0.35)
+plt.plot(price['slow'],label = 'slow', alpha = 0.35)
+plt.scatter(signals.index,  signals['buy_signal'],label = 'Buy',marker = '^', color = 'green')
+plt.scatter(signals.index, signals['sell_signal'], label = 'Sell', marker = 'v', color = 'red')
+plt.title('Adj Close history buy and sell signals')
+plt.xlabel('{} - {}'.format(first_date, last_date))
+plt.ylabel('Adj Close')
+plt.legend()
+plt.show()
